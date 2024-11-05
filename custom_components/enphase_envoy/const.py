@@ -26,7 +26,7 @@ from homeassistant.const import (
     EntityCategory,
 )
 
-DOMAIN = "enphase_envoy"
+DOMAIN = "enphase_envoy_v7"
 
 PLATFORMS = [
     Platform.SENSOR,
