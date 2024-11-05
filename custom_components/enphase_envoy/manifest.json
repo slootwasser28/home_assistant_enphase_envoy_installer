@@ -1,5 +1,5 @@
 {
-  "domain": "enphase_envoy",
+  "domain": "enphase_envoy_v7",
   "name": "Enphase Envoy (Installer)",
   "codeowners": ["@vincentwolsink", "@mnederlof"],
   "config_flow": true,
