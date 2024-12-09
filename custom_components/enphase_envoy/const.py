@@ -1,5 +1,6 @@
 """The enphase_envoy component."""
 
+from dataclasses import dataclass
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntityDescription,
@@ -22,8 +23,10 @@ from homeassistant.const import (
     UnitOfElectricPotential,
     UnitOfElectricCurrent,
     UnitOfTemperature,
+    UnitOfTime,
     UnitOfReactivePower,
     EntityCategory,
+    SIGNAL_STRENGTH_DECIBELS,
 )
 
 DOMAIN = "enphase_envoy_v7"
@@ -60,6 +63,7 @@ PRODUCT_ID_MAPPING = {
     "800-01736": {"name": "IQ7+ Microinverter", "sku": "IQ7PLUS-72-M-INT"},
     "800-00631": {"name": "IQ7+ Microinverter", "sku": "IQ7PLUS-72-2-INT"},
     "800-01127": {"name": "IQ7A Microinverter", "sku": "IQ7A-72-M-INT"},
+    "800-01135": {"name": "IQ7XS Microinverter", "sku": "IQ7XS-96-ACM-US"},
     "830-01760": {"name": "IQ Battery 3T", "sku": "B03-T01-INT00-1-2"},
 }
 
@@ -71,6 +75,11 @@ BATTERY_STATE_MAPPING = {
 }
 
 STORAGE_MODES = ["backup", "self-consumption", "savings-mode", "economy"]
+
+
+@dataclass
+class InverterSensorEntityDescription(SensorEntityDescription):
+    retain: bool = False
 
 
 def resolve_product_mapping(product_id):
@@ -140,42 +149,129 @@ SENSORS = (
         device_class=SensorDeviceClass.ENERGY,
         suggested_display_precision=0,
     ),
-    SensorEntityDescription(
-        key="inverters",
-        name="Production",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        state_class=SensorStateClass.MEASUREMENT,
-        device_class=SensorDeviceClass.POWER,
-        suggested_display_precision=0,
-    ),
-    SensorEntityDescription(
-        key="inverters_ac_voltage",
-        name="AC Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        state_class=SensorStateClass.MEASUREMENT,
-        device_class=SensorDeviceClass.VOLTAGE,
-    ),
-    SensorEntityDescription(
-        key="inverters_dc_voltage",
-        name="DC Voltage",
-        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
-        state_class=SensorStateClass.MEASUREMENT,
-        device_class=SensorDeviceClass.VOLTAGE,
-    ),
-    SensorEntityDescription(
-        key="inverters_dc_current",
+    InverterSensorEntityDescription(
+        key="inverter_data_dc_current",
         name="DC Current",
         icon="mdi:current-dc",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.CURRENT,
+        suggested_display_precision=3,
     ),
-    SensorEntityDescription(
-        key="inverters_temperature",
+    InverterSensorEntityDescription(
+        key="inverter_data_ac_frequency",
+        name="AC Frequency",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.FREQUENCY,
+        suggested_display_precision=3,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_watts",
+        name="Production",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        suggested_display_precision=0,
+        retain=True,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_ac_voltage",
+        name="AC Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        suggested_display_precision=3,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_ac_current",
+        name="AC Current",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.CURRENT,
+        suggested_display_precision=3,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_dc_voltage",
+        name="DC Voltage",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        suggested_display_precision=3,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_temperature",
         name="Temperature",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.TEMPERATURE,
+        suggested_display_precision=0,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_lifetime_power",
+        name="Lifetime Energy Production",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=0,
+        retain=True,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_watt_hours_today",
+        name="Today's Energy Production",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=0,
+        retain=True,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_watt_hours_yesterday",
+        name="Yesterday's Energy Production",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=0,
+        retain=True,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_watt_hours_week",
+        name="This Week's Energy Production",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=0,
+        retain=True,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_last_reading",
+        name="Last Reading",
+        native_unit_of_measurement=None,
+        state_class=None,
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        retain=True,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_conversion_error_cycles",
+        name="Power Conversion Error Cycles",
+        native_unit_of_measurement=None,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=None,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:counter",
+        retain=True,
+    ),
+    InverterSensorEntityDescription(
+        key="inverter_data_conversion_error",
+        name="Power Conversion Error Seconds",
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.DURATION,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        retain=True,
     ),
     SensorEntityDescription(
         key="batteries_power",
@@ -275,7 +371,7 @@ SENSORS = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
-        key="inverters_communication_level",
+        key="inverter_pcu_communication_level",
         name="Communication Level",
         device_class=SensorDeviceClass.POWER_FACTOR,
         state_class=SensorStateClass.MEASUREMENT,
@@ -283,7 +379,7 @@ SENSORS = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
-        key="relays_communication_level",
+        key="relay_pcu_communication_level",
         name="Communication Level",
         device_class=SensorDeviceClass.POWER_FACTOR,
         state_class=SensorStateClass.MEASUREMENT,
@@ -297,21 +393,76 @@ SENSORS = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
-        key="inverters_software",
+        key="inverter_info_img_pnum_running",
         name="Firmware Version",
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
-        key="relays_software",
+        key="relay_info_img_pnum_running",
         name="Firmware Version",
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="relay_data_state_change_count",
+        name="State Change Count",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+        icon="mdi:counter",
+    ),
+    SensorEntityDescription(
+        key="relay_data_temperature",
+        name="Temperature",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        suggested_display_precision=0,
     ),
     SensorEntityDescription(
         key="batteries_software",
         name="Firmware Version",
         icon="mdi:memory",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    SensorEntityDescription(
+        key="relay_data_voltage_l1",
+        name="Voltage L1",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        suggested_display_precision=3,
+    ),
+    SensorEntityDescription(
+        key="relay_data_voltage_l2",
+        name="Voltage L2",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        suggested_display_precision=3,
+    ),
+    SensorEntityDescription(
+        key="relay_data_voltage_l3",
+        name="Voltage L3",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        suggested_display_precision=3,
+    ),
+    SensorEntityDescription(
+        key="relay_data_frequency",
+        name="Frequency",
+        native_unit_of_measurement=UnitOfFrequency.HERTZ,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.FREQUENCY,
+        suggested_display_precision=3,
+    ),
+    SensorEntityDescription(
+        key="relay_data_last_reading",
+        name="Last Reading",
+        native_unit_of_measurement=None,
+        state_class=None,
+        device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
@@ -435,13 +586,13 @@ for phase in ["l1", "l2", "l3"]:
 
 BINARY_SENSORS = (
     BinarySensorEntityDescription(
-        key="inverters_producing",
+        key="inverter_info_producing",
         name="Producing",
         device_class=BinarySensorDeviceClass.POWER,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     BinarySensorEntityDescription(
-        key="inverters_communicating",
+        key="inverter_info_communicating",
         name="Communicating",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -452,26 +603,15 @@ BINARY_SENSORS = (
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
     ),
     BinarySensorEntityDescription(
-        key="relays",
+        key="relay_info_relay",
         name="Contact",
         device_class=BinarySensorDeviceClass.POWER,
     ),
     BinarySensorEntityDescription(
-        key="relays_communicating",
+        key="relay_info_communicating",
         name="Communicating",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
         entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    BinarySensorEntityDescription(
-        key="relays_forced",
-        name="Forced",
-        device_class=BinarySensorDeviceClass.TAMPER,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    BinarySensorEntityDescription(
-        key="firmware",
-        name="Firmware",
-        device_class=BinarySensorDeviceClass.UPDATE,
     ),
     BinarySensorEntityDescription(
         key="batteries_operating",

@@ -65,39 +65,71 @@ def has_metering_setup(json):
     return json["production"][1]["activeCount"] > 0
 
 
-def parse_devstatus(data):
-    def convert_dev(dev):
-        def iter():
-            for key, value in dev.items():
-                if key == "reportDate":
-                    yield "report_date", (
-                        time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
-                        if value
-                        else None
-                    )
-                elif key == "dcVoltageINmV":
-                    yield "dc_voltage", int(value) / 1000
-                elif key == "dcCurrentINmA":
-                    yield "dc_current", int(value) / 1000
-                elif key == "acVoltageINmV":
-                    yield "ac_voltage", int(value) / 1000
-                elif key == "acPowerINmW":
-                    yield "ac_power", int(value) / 1000
-                else:
-                    yield key, value
+def parse_devicedata(data):
+    pcu_data = {
+        "type": "devName",
+        "sn": "sn",
+        "active": "active",
+        "watts": "channels[0].watts.now",
+        "watts_max": "channels[0].watts.max",
+        "watt_hours_today": "channels[0].wattHours.today",
+        "watt_hours_yesterday": "channels[0].wattHours.yesterday",
+        "watt_hours_week": "channels[0].wattHours.week",
+        "ac_voltage": "channels[0].lastReading.acVoltageINmV",
+        "ac_frequency": "channels[0].lastReading.acFrequencyINmHz",
+        "ac_current": "channels[0].lastReading.acCurrentInmA",
+        "dc_voltage": "channels[0].lastReading.dcVoltageINmV",
+        "dc_current": "channels[0].lastReading.dcCurrentINmA",
+        "temperature": "channels[0].lastReading.channelTemp",
+        "rssi": "channels[0].lastReading.rssi",
+        "issi": "channels[0].lastReading.issi",
+        "lifetime_power": "channels[0].lifetime.joulesProduced",
+        "conversion_error": "channels[0].lastReading.pwrConvErrSecs",
+        "conversion_error_cycles": "channels[0].lastReading.pwrConvMaxErrCycles",
+        "gone": "modGone",
+        "last_reading": "channels[0].lastReading.endDate",
+    }
+    nsrb_data = {
+        "type": "devName",
+        "sn": "sn",
+        "active": "active",
+        "temperature": "channels[0].lastReading.temperature",
+        "frequency": "channels[0].lastReading.freqInmHz",
+        "state_change_count": "channels[0].lastReading.stateChngCnt",
+        "voltage_l1": "channels[0].lastReading.[voltRmsL1,VrmsL1N]",
+        "voltage_l2": "channels[0].lastReading.[voltRmsL2,VrmsL2N]",
+        "voltage_l3": "channels[0].lastReading.[voltRmsL3,VrmsL3N]",
+        "gone": "modGone",
+        "last_reading": "channels[0].lastReading.endDate",
+    }
 
-        return dict(iter())
+    idd = {}
+    for device in data.values():
+        if isinstance(device, dict) and device.get("active") is True:
+            if device.get("devName") == "pcu":
+                dataset = pcu_data
+            elif device.get("devName") == "nsrb":
+                dataset = nsrb_data
+            else:
+                continue
 
-    new_data = {}
-    for key, val in data.items():
-        if val.get("fields", None) == None or val.get("values", None) == None:
-            new_data[key] = val
-            continue
+            device_data = {}
+            for field, path in dataset.items():
+                result = jsonpath(device, path)
+                if result:
+                    value = result[0]
+                    _LOGGER.debug(f"Found device data field {field}: {value}")
+                    if path.endswith(("mA", "mV", "mHz")) or field.startswith(
+                        "voltage_"
+                    ):
+                        device_data[field] = int(value) / 1000
+                    elif path.endswith("joulesProduced"):
+                        device_data[field] = int(value) * 0.000277778
+                    else:
+                        device_data[field] = value
+            idd[device.get("sn")] = device_data
 
-        new_data[key] = [
-            convert_dev(dict(zip(val["fields"], entry))) for entry in val["values"]
-        ]
-    return new_data
+    return idd
 
 
 class EnvoyReaderError(Exception):
@@ -248,9 +280,9 @@ class EnvoyData(object):
             return
 
         content_type = response.headers.get("content-type", "application/json")
-        if endpoint == "endpoint_devstatus":
+        if endpoint == "endpoint_device_data":
             # Do extra parsing, to zip the fields and values and make it a proper dict
-            self.data[endpoint] = parse_devstatus(response.json())
+            self.data[endpoint] = parse_devicedata(response.json())
         elif content_type == "application/json":
             self.data[endpoint] = response.json()
         elif content_type in ("text/xml", "application/xml"):
@@ -405,42 +437,16 @@ class EnvoyStandard(EnvoyData):
         if grid_status != None:
             return grid_status == "closed"
 
-    inverters_data_value = path_by_token(
-        owner="endpoint_production_inverters.[?(@.devType==1)]",
-        installer="endpoint_devstatus.pcu[?(@.devType==1)]",
-    )
+    @envoy_property(required_endpoint="endpoint_production_inverters")
+    def inverter_production(self):
+        return self._path_to_dict(
+            "endpoint_production_inverters.[?(@.devType==1)]", "serialNumber"
+        )
 
     pcu_availability_value = "endpoint_pcu_comm_check"
 
-    @envoy_property
-    def inverters_production(self):
-        # We will use the endpoint based on the token_type, which is automatically resolved by the inverters_data property
-        data = self.get("inverters_data")
-
-        def iter():
-            if (
-                self.reader.token_type == "installer"
-                and not self.reader.disable_installer_account_use
-            ):
-                for item in data:
-                    yield item["serialNumber"], {
-                        "watt": item["ac_power"],
-                        "report_date": item["report_date"],
-                    }
-            else:
-                # endpoint_production_inverters endpoint
-                for item in data:
-                    yield item["serialNumber"], {
-                        "watt": item["lastReportWatts"],
-                        "report_date": time.strftime(
-                            "%Y-%m-%d %H:%M:%S", time.localtime(item["lastReportDate"])
-                        ),
-                    }
-
-        return dict(iter())
-
     @envoy_property(required_endpoint="endpoint_inventory")
-    def inverters_info(self):
+    def inverter_info(self):
         return self._path_to_dict(
             "endpoint_inventory.[?(@.type=='PCU')].devices[?(@.dev_type==1)]",
             "serial_num",
@@ -453,26 +459,13 @@ class EnvoyStandard(EnvoyData):
             "serial_num",
         )
 
-    @envoy_property(required_endpoint="endpoint_devstatus")
-    def inverters_status(self):
-        return self._path_to_dict(
-            "endpoint_devstatus.pcu[?(@.devType==1)]",
-            "serialNumber",
-        )
+    @envoy_property(required_endpoint="endpoint_device_data")
+    def inverter_device_data(self):
+        return self._path_to_dict("endpoint_device_data.[?(@.type=='pcu')]", "sn")
 
-    @envoy_property(required_endpoint="endpoint_devstatus")
-    def relays(self):
-        status = self._path_to_dict(
-            [
-                "endpoint_devstatus.pcu[?(@.devType==12)]",
-                "endpoint_devstatus.nsrb",
-            ],
-            "serialNumber",
-        )
-        if not status:
-            # fallback to the information which is available with owner token.
-            status = self.get("relay_info")
-        return status
+    @envoy_property(required_endpoint="endpoint_device_data")
+    def relay_device_data(self):
+        return self._path_to_dict("endpoint_device_data.[?(@.type=='nsrb')]", "sn")
 
     @envoy_property(required_endpoint="endpoint_ensemble_inventory")
     def batteries(self):
@@ -607,11 +600,6 @@ class EnvoyMeteredWithCT(EnvoyMetered):
                 f"daily_production_{phase}_value",
                 f"endpoint_production_json.production[?(@.type=='eim')].lines[{i}].whToday",
             )
-
-        # When we're using the endpoint_production_report primarily, then the following
-        # endpoint can be used way less frequently
-        reader.uri_registry["endpoint_production_json"]["cache_time"] = 50
-        reader.uri_registry["endpoint_production_inverters"]["cache_time"] = 290
 
         return EnvoyMetered.__new__(cls)
 
