@@ -1,13 +1,13 @@
 {
   "domain": "enphase_envoy_v7",
   "name": "Enphase Envoy (Installer)",
-  "codeowners": ["@vincentwolsink", "@mnederlof"],
+  "codeowners": ["@slootwasser28"],
   "config_flow": true,
   "dependencies": ["zeroconf"],
-  "documentation": "https://github.com/vincentwolsink/home_assistant_enphase_envoy_installer/",
+  "documentation": "https://github.com/slootwasser28/home_assistant_enphase_envoy_installer/",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/vincentwolsink/home_assistant_enphase_envoy_installer/issues",
+  "issue_tracker": "https://github.com/slootwasser28/home_assistant_enphase_envoy_installer/issues",
   "requirements": ["pyjwt", "xmltodict", "httpx", "jsonpath"],
   "version": "0.5.2",
   "zeroconf": ["_enphase-envoy._tcp.local."]

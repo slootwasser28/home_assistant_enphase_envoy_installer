@@ -24,8 +24,8 @@ Features:
 
 ## Screenshots
 
-![phase_sensors](https://github.com/vincentwolsink/home_assistant_enphase_envoy_installer/assets/1639734/87fc0c3d-1fd8-4e2c-b7ce-df48531c90e6)
-![inverter_sensors](https://github.com/vincentwolsink/home_assistant_enphase_envoy_installer/assets/1639734/d0033e75-6b89-46dd-bf1e-449bbca957f2)
+![phase_sensors](https://github.com/slootwasser28/home_assistant_enphase_envoy_installer/assets/1639734/87fc0c3d-1fd8-4e2c-b7ce-df48531c90e6)
+![inverter_sensors](https://github.com/slootwasser28/home_assistant_enphase_envoy_installer/assets/1639734/d0033e75-6b89-46dd-bf1e-449bbca957f2)
 
 ## Available Entities
 Available entities differ per Envoy type and configuration.
@@ -127,7 +127,7 @@ Available entities differ per Envoy type and configuration.
 
 ## Installation
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=vincentwolsink&repository=home_assistant_enphase_envoy_installer&category=integration)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=slootwasser28&repository=home_assistant_enphase_envoy_installer&category=integration)
 
 Or follow these steps:
 1. Install [HACS](https://hacs.xyz/) if you haven't already
@@ -138,9 +138,9 @@ Or follow these steps:
 ## Credits
 Based on work from [@briancmpbll](https://github.com/briancmpbll/home_assistant_custom_envoy)
 
-[releases-shield]: https://img.shields.io/github/v/release/vincentwolsink/home_assistant_enphase_envoy_installer.svg?style=for-the-badge
-[releases]: https://github.com/vincentwolsink/home_assistant_enphase_envoy_installer/releases
-[maintainer-shield]: https://img.shields.io/badge/maintainer-vincentwolsink-blue.svg?style=for-the-badge
-[maintainer]: https://github.com/vincentwolsink
+[releases-shield]: https://img.shields.io/github/v/release/slootwasser28/home_assistant_enphase_envoy_installer.svg?style=for-the-badge
+[releases]: https://github.com/slootwasser28/home_assistant_enphase_envoy_installer/releases
+[maintainer-shield]: https://img.shields.io/badge/maintainer-slootwasser28-blue.svg?style=for-the-badge
+[maintainer]: https://github.com/slootwasser28
 [hacs-shield]: https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge
-[hacs-url]: https://github.com/vincentwolsink/home_assistant_enphase_envoy_installer
+[hacs-url]: https://github.com/slootwasser28/home_assistant_enphase_envoy_installer
