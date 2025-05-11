@@ -60,6 +60,7 @@ PRODUCT_ID_MAPPING = {
     "800-00656": {"name": "Envoy-S-Standard-EU", "sku": "ENV-S-WB-230"},
     "800-01359": {"name": "IQ8+ Microinverter", "sku": "IQ8PLUS-72-M-INT"},
     "800-01391": {"name": "IQ8HC Microinverter", "sku": "IQ8HC-72-M-INT"},
+    "800-01396": {"name": "IQ8MC Microinverter", "sku": "IQ8MC-72-M-INT"},
     "800-01736": {"name": "IQ7+ Microinverter", "sku": "IQ7PLUS-72-M-INT"},
     "800-00631": {"name": "IQ7+ Microinverter", "sku": "IQ7PLUS-72-2-INT"},
     "800-01127": {"name": "IQ7A Microinverter", "sku": "IQ7A-72-M-INT"},
@@ -104,7 +105,7 @@ def get_model_name(model, hardware_id):
 SENSORS = (
     SensorEntityDescription(
         key="production",
-        name="Current Power Production",
+        name="Power Production",
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.POWER,
@@ -126,8 +127,16 @@ SENSORS = (
         suggested_display_precision=0,
     ),
     SensorEntityDescription(
+        key="lifetime_net_production",
+        name="Lifetime Net Energy Production",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
         key="consumption",
-        name="Current Power Consumption",
+        name="Power Consumption",
         native_unit_of_measurement=UnitOfPower.WATT,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.POWER,
@@ -144,6 +153,30 @@ SENSORS = (
     SensorEntityDescription(
         key="lifetime_consumption",
         name="Lifetime Energy Consumption",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="net_consumption",
+        name="Net Power Consumption",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.POWER,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="daily_net_consumption",
+        name="Today's Net Energy Consumption",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=0,
+    ),
+    SensorEntityDescription(
+        key="lifetime_net_consumption",
+        name="Lifetime Net Energy Consumption",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         state_class=SensorStateClass.TOTAL,
         device_class=SensorDeviceClass.ENERGY,
@@ -281,6 +314,22 @@ SENSORS = (
         device_class=SensorDeviceClass.POWER,
     ),
     SensorEntityDescription(
+        key="lifetime_batteries_charged",
+        name="Lifetime Batteries Energy Charged",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        icon="mdi:battery-charging",
+    ),
+    SensorEntityDescription(
+        key="lifetime_batteries_discharged",
+        name="Lifetime Batteries Energy Discharged",
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        state_class=SensorStateClass.TOTAL,
+        device_class=SensorDeviceClass.ENERGY,
+        icon="mdi:battery-charging",
+    ),
+    SensorEntityDescription(
         key="batteries_percentFull",
         name="Charge",
         native_unit_of_measurement=PERCENTAGE,
@@ -301,6 +350,7 @@ SENSORS = (
         state_class=SensorStateClass.TOTAL,
         device_class=SensorDeviceClass.ENERGY,
         entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery",
     ),
     SensorEntityDescription(
         key="batteries_encharge_available_energy",
@@ -308,6 +358,7 @@ SENSORS = (
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         state_class=SensorStateClass.TOTAL,
         device_class=SensorDeviceClass.ENERGY,
+        icon="mdi:battery-charging-100",
     ),
     SensorEntityDescription(
         key="batteries_led_status",
@@ -328,6 +379,7 @@ SENSORS = (
         state_class=SensorStateClass.TOTAL,
         device_class=SensorDeviceClass.ENERGY,
         entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:battery",
     ),
     SensorEntityDescription(
         key="agg_batteries_available_energy",
@@ -335,6 +387,7 @@ SENSORS = (
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         state_class=SensorStateClass.TOTAL,
         device_class=SensorDeviceClass.ENERGY,
+        icon="mdi:battery-charging-100",
     ),
     SensorEntityDescription(
         key="agg_batteries_power",
@@ -345,14 +398,14 @@ SENSORS = (
     ),
     SensorEntityDescription(
         key="voltage",
-        name="Current Voltage",
+        name="Voltage",
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.VOLTAGE,
     ),
     SensorEntityDescription(
         key="ampere",
-        name="Current Amps",
+        name="Amperes",
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         state_class=SensorStateClass.MEASUREMENT,
         device_class=SensorDeviceClass.CURRENT,
@@ -479,7 +532,7 @@ for phase in ["l1", "l2", "l3"]:
         [
             SensorEntityDescription(
                 key=f"production_{phase}",
-                name=f"Current Power Production {phase.upper()}",
+                name=f"Power Production {phase.upper()}",
                 native_unit_of_measurement=UnitOfPower.WATT,
                 state_class=SensorStateClass.MEASUREMENT,
                 device_class=SensorDeviceClass.POWER,
@@ -502,15 +555,23 @@ for phase in ["l1", "l2", "l3"]:
                 suggested_display_precision=0,
             ),
             SensorEntityDescription(
+                key=f"lifetime_net_production_{phase}",
+                name=f"Lifetime Net Energy Production {phase.upper()}",
+                native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+                state_class=SensorStateClass.TOTAL_INCREASING,
+                device_class=SensorDeviceClass.ENERGY,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
                 key=f"voltage_{phase}",
-                name=f"Current Voltage {phase.upper()}",
+                name=f"Voltage {phase.upper()}",
                 native_unit_of_measurement=UnitOfElectricPotential.VOLT,
                 state_class=SensorStateClass.MEASUREMENT,
                 device_class=SensorDeviceClass.VOLTAGE,
             ),
             SensorEntityDescription(
                 key=f"ampere_{phase}",
-                name=f"Current Amps {phase.upper()}",
+                name=f"Amperes {phase.upper()}",
                 native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
                 state_class=SensorStateClass.MEASUREMENT,
                 device_class=SensorDeviceClass.CURRENT,
@@ -550,7 +611,7 @@ for phase in ["l1", "l2", "l3"]:
             #
             SensorEntityDescription(
                 key=f"consumption_{phase}",
-                name=f"Current Power Consumption {phase.upper()}",
+                name=f"Power Consumption {phase.upper()}",
                 native_unit_of_measurement=UnitOfPower.WATT,
                 state_class=SensorStateClass.MEASUREMENT,
                 device_class=SensorDeviceClass.POWER,
@@ -571,6 +632,46 @@ for phase in ["l1", "l2", "l3"]:
                 state_class=SensorStateClass.TOTAL,
                 device_class=SensorDeviceClass.ENERGY,
                 suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"net_consumption_{phase}",
+                name=f"Net Power Consumption {phase.upper()}",
+                native_unit_of_measurement=UnitOfPower.WATT,
+                state_class=SensorStateClass.MEASUREMENT,
+                device_class=SensorDeviceClass.POWER,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"daily_net_consumption_{phase}",
+                name=f"Today's Net Energy Consumption {phase.upper()}",
+                native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+                state_class=SensorStateClass.TOTAL,
+                device_class=SensorDeviceClass.ENERGY,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"lifetime_net_consumption_{phase}",
+                name=f"Lifetime Net Energy Consumption {phase.upper()}",
+                native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+                state_class=SensorStateClass.TOTAL,
+                device_class=SensorDeviceClass.ENERGY,
+                suggested_display_precision=0,
+            ),
+            SensorEntityDescription(
+                key=f"lifetime_batteries_charged_{phase}",
+                name=f"Lifetime Batteries Energy Charged {phase.upper()}",
+                native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+                state_class=SensorStateClass.TOTAL,
+                device_class=SensorDeviceClass.ENERGY,
+                icon="mdi:battery-charging",
+            ),
+            SensorEntityDescription(
+                key=f"lifetime_batteries_discharged_{phase}",
+                name=f"Lifetime Batteries Energy Discharged {phase.upper()}",
+                native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+                state_class=SensorStateClass.TOTAL,
+                device_class=SensorDeviceClass.ENERGY,
+                icon="mdi:battery-charging",
             ),
         ]
     )

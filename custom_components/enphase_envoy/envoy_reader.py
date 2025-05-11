@@ -65,6 +65,50 @@ def has_metering_setup(json):
     return json["production"][1]["activeCount"] > 0
 
 
+def parse_devstatus(data):
+    pcu_data = {
+        "sn": "serialNumber",
+        "type": "devType",
+        "last_reading": "reportDate",
+        "temperature": "temperature",
+        "dc_voltage": "dcVoltageINmV",
+        "dc_current": "dcCurrentINmA",
+        "ac_voltage": "acVoltageINmV",
+        "ac_power": "acPowerINmW",
+        "gone": "communicating",
+    }
+    device_type = {1: "pcu", 12: "nsrb"}
+
+    idd = []
+    for itemtype, content in data.items():
+        if itemtype == "pcu":
+            dataset = pcu_data
+        else:
+            continue
+
+        fields = content.get("fields", {})
+        values = content.get("values", [])
+        field_map = {key: fields.index(field) for key, field in dataset.items()}
+
+        for valueset in values:
+            device_data = {}
+            for field, index in field_map.items():
+                value = valueset[index]
+
+                _LOGGER.debug(f"Found device status field {field}: {value}")
+                if dataset[field].endswith(("mA", "mV", "mHz")):
+                    device_data[field] = int(value) / 1000
+                elif field == "type":
+                    device_data[field] = device_type.get(value, value)
+                elif field == "gone":
+                    device_data[field] = not value
+                else:
+                    device_data[field] = value
+            idd.append(device_data)
+
+    return idd
+
+
 def parse_devicedata(data):
     pcu_data = {
         "type": "devName",
@@ -103,7 +147,7 @@ def parse_devicedata(data):
         "last_reading": "channels[0].lastReading.endDate",
     }
 
-    idd = {}
+    idd = []
     for device in data.values():
         if isinstance(device, dict) and device.get("active") is True:
             if device.get("devName") == "pcu":
@@ -127,9 +171,26 @@ def parse_devicedata(data):
                         device_data[field] = int(value) * 0.000277778
                     else:
                         device_data[field] = value
-            idd[device.get("sn")] = device_data
+            idd.append(device_data)
 
     return idd
+
+
+def merge_metersdata(data1=[], data2=[]):
+    for el2 in data2:
+        for el1 in data1:
+            if el1["eid"] == el2["eid"]:
+                el1.update(el2)
+                break
+        else:
+            data1.append(el2)
+
+    return data1
+
+
+def read_file_as_bytes(filename):
+    with open(filename, "rb") as f:
+        return f.read()
 
 
 class EnvoyReaderError(Exception):
@@ -146,6 +207,8 @@ class EnvoyError(EnvoyReaderError):
 
 class FileData:
     def __init__(self, file):
+        self.file = file
+
         if file.endswith(".json"):
             self.content_type = "application/json"
             with open(file) as json_file:
@@ -165,8 +228,20 @@ class FileData:
     def headers(self):
         return {"content-type": self.content_type}
 
+    @property
+    def url(self):
+        return self.Url(self.file)
+
     def json(self):
         return self.json_data
+
+    class Url:
+        def __init__(self, url):
+            self.url = url
+
+        @property
+        def path(self):
+            return self.url.split("/")[-1]
 
 
 class StreamData:
@@ -280,23 +355,34 @@ class EnvoyData(object):
             return
 
         content_type = response.headers.get("content-type", "application/json")
+        path = response.url.path
+
         if endpoint == "endpoint_device_data":
-            # Do extra parsing, to zip the fields and values and make it a proper dict
             self.data[endpoint] = parse_devicedata(response.json())
-        elif content_type == "application/json":
-            self.data[endpoint] = response.json()
-        elif content_type in ("text/xml", "application/xml"):
+        elif endpoint == "endpoint_devstatus":
+            self.data[endpoint] = parse_devstatus(response.json())
+        elif content_type in ("text/xml", "application/xml") or path.endswith(".xml"):
             self.data[endpoint] = xmltodict.parse(response.text)
+        elif content_type == "application/json" or path.endswith(".json"):
+            self.data[endpoint] = response.json()
         else:
             self.data[endpoint] = response.text
+
+        if endpoint in ["endpoint_meters", "endpoint_meters_readings"]:
+            self.data["endpoint_meters_readings"] = merge_metersdata(
+                self.data.get("endpoint_meters_readings", []), self.data[endpoint]
+            )
+
+        _LOGGER.debug("Endpoint '%s' data: %s", endpoint, self.data[endpoint])
 
     @property
     def required_endpoints(self):
         """Method that will return all endpoints which are defined in the _value parameters."""
-        if self._required_endpoints != None:  # return cached value
+        if self._required_endpoints is not None:  # return cached value
             return self._required_endpoints
 
-        endpoints = set()
+        endpoints = []
+        endpoints.append(self.reader.device_data_endpoint)
 
         # Loop through all local attributes, and return unique first required jsonpath attribute.
         for attr in dir(self):
@@ -309,11 +395,11 @@ class EnvoyData(object):
                         # If the resolved path is None, we skip this path for the endpoints
                         continue
 
-                endpoints.add(path.split(".", 1)[0])
+                endpoints.append(path.split(".", 1)[0])
                 continue  # discovered, so continue
 
             if attr in self._envoy_properties and isinstance(
-                self._envoy_properties[attr], str
+                self._envoy_properties[attr], (str, list)
             ):
                 value = getattr(self, attr)
                 if self.initial_update_finished and value in (None, [], {}):
@@ -322,7 +408,13 @@ class EnvoyData(object):
                     # so do not require it.
                     continue
 
-                endpoints.add(self._envoy_properties[attr])
+                attr_values = self._envoy_properties[attr]
+                if not isinstance(attr_values, list):
+                    attr_values = [attr_values]
+
+                endpoints.extend(attr_values)
+
+        endpoints = set(endpoints)
 
         if self.initial_update_finished:
             # Save the list in memory, as we should not evaluate this list again.
@@ -459,13 +551,17 @@ class EnvoyStandard(EnvoyData):
             "serial_num",
         )
 
-    @envoy_property(required_endpoint="endpoint_device_data")
+    @envoy_property()
     def inverter_device_data(self):
-        return self._path_to_dict("endpoint_device_data.[?(@.type=='pcu')]", "sn")
+        return self._path_to_dict(
+            f"{self.reader.device_data_endpoint}.[?(@.type=='pcu')]", "sn"
+        )
 
-    @envoy_property(required_endpoint="endpoint_device_data")
+    @envoy_property()
     def relay_device_data(self):
-        return self._path_to_dict("endpoint_device_data.[?(@.type=='nsrb')]", "sn")
+        return self._path_to_dict(
+            f"{self.reader.device_data_endpoint}.[?(@.type=='nsrb')]", "sn"
+        )
 
     @envoy_property(required_endpoint="endpoint_ensemble_inventory")
     def batteries(self):
@@ -538,6 +634,18 @@ class EnvoyMetered(EnvoyStandard):
                 full_path = f"{ct_path}.lines[{i}]{path}"
                 setattr(cls, f"{attr}_{phase}_value", full_path)
 
+        for attr, path in {
+            "net_consumption": ".wNow",
+            "daily_net_consumption": ".whToday",
+            "lifetime_net_consumption": ".whLifetime",
+        }.items():
+            ct_path = cls._net_consumption_ct
+            setattr(cls, f"{attr}_value", ct_path + path)
+
+            for i, phase in enumerate(["l1", "l2", "l3"]):
+                full_path = f"{ct_path}.lines[{i}]{path}"
+                setattr(cls, f"{attr}_{phase}_value", full_path)
+
         return EnvoyStandard.__new__(cls)
 
     _production = "endpoint_production_json.production[?(@.type=='inverters')]"
@@ -560,6 +668,7 @@ class EnvoyMetered(EnvoyStandard):
         "endpoint_production_json.production[?(@.type=='eim' && @.activeCount > 0)]"
     )
     _consumption_ct = "endpoint_production_json.consumption[?(@.measurementType == 'total-consumption' && @.activeCount > 0)]"
+    _net_consumption_ct = "endpoint_production_json.consumption[?(@.measurementType == 'net-consumption' && @.activeCount > 0)]"
     voltage_value = _production_ct + ".rmsVoltage"
 
 
@@ -589,19 +698,41 @@ class EnvoyMeteredWithCT(EnvoyMetered):
                 full_path = f"{ct_path}.lines[{i}]{path}"
                 setattr(cls, f"{attr}_{phase}_value", full_path)
 
-        setattr(
-            cls,
-            "daily_production_value",
-            "endpoint_production_json.production[?(@.type=='eim')].whToday",
-        )
         for i, phase in enumerate(["l1", "l2", "l3"]):
             setattr(
                 cls,
                 f"daily_production_{phase}_value",
                 f"endpoint_production_json.production[?(@.type=='eim')].lines[{i}].whToday",
             )
+            setattr(
+                cls,
+                f"lifetime_net_production_{phase}_value",
+                f"endpoint_meters_readings.[?(@.measurementType == 'net-consumption' && @.state == 'enabled' && @.phaseCount > {i})].channels[{i}].actEnergyRcvd",
+            )
+            setattr(
+                cls,
+                f"lifetime_batteries_charged_{phase}_value",
+                f"endpoint_meters_readings.[?(@.measurementType == 'storage' && @.state == 'enabled' && @.phaseCount > {i})].channels[{i}].actEnergyRcvd",
+            )
+            setattr(
+                cls,
+                f"lifetime_batteries_discharged_{phase}_value",
+                f"endpoint_meters_readings.[?(@.measurementType == 'storage' && @.state == 'enabled' && @.phaseCount > {i})].channels[{i}].actEnergyDlvd",
+            )
 
         return EnvoyMetered.__new__(cls)
+
+    @envoy_property(required_endpoint=["endpoint_meters", "endpoint_meters_readings"])
+    def meters_readings(self):
+        return self._resolve_path("endpoint_meters_readings")
+
+    daily_production_value = (
+        "endpoint_production_json.production[?(@.type=='eim')].whToday"
+    )
+    lifetime_net_production_value = "endpoint_meters_readings.[?(@.measurementType == 'net-consumption' && @.state == 'enabled')].actEnergyRcvd"
+
+    lifetime_batteries_charged_value = "endpoint_meters_readings.[?(@.measurementType == 'storage' && @.state == 'enabled')].actEnergyRcvd"
+    lifetime_batteries_discharged_value = "endpoint_meters_readings.[?(@.measurementType == 'storage' && @.state == 'enabled')].actEnergyDlvd"
 
 
 def get_envoydataclass(envoy_type, production_json):
@@ -636,6 +767,7 @@ class EnvoyReader:
         disable_negative_production=False,
         disabled_endpoints=[],
         lifetime_production_correction=0,
+        device_data_endpoint="endpoint_device_data",
     ):
         """Init the EnvoyReader."""
         self.host = host.lower()
@@ -660,6 +792,7 @@ class EnvoyReader:
         self.required_endpoints = set()  # in case we would need it..
         self.disabled_endpoints = disabled_endpoints
         self.lifetime_production_correction = lifetime_production_correction
+        self.device_data_endpoint = device_data_endpoint
 
         self.uri_registry = {}
         for key, endpoint in ENVOY_ENDPOINTS.items():
@@ -695,7 +828,7 @@ class EnvoyReader:
         return self.uri_registry[attr]
 
     def _clear_endpoint_cache(self, attr):
-        if attr not in self.uri_registry[attr]:
+        if attr not in self.uri_registry:
             return
 
         # Setting last_fetch to 0 ensures it will be fetched upon next run
@@ -1065,6 +1198,7 @@ class EnvoyReader:
         for endpoint in endpoints:
             endpoint_settings = self.uri_registry.get(endpoint)
 
+            _LOGGER.info("VALIDATING ENDPOINT %s", endpoint)
             if endpoint_settings["optional"] and endpoint in self.disabled_endpoints:
                 _LOGGER.info(
                     "Skipping update of disabled %s: %s",
@@ -1101,9 +1235,16 @@ class EnvoyReader:
                     url=endpoint_settings["url"],
                 )
                 _LOGGER.info(
-                    "- FETCHING ENDPOINT %s TOOK %.4f seconds",
+                    "FETCHING ENDPOINT %s TOOK %.4f seconds",
                     endpoint,
                     time.time() - endpoint_settings["last_fetch"],
+                )
+            else:
+                _LOGGER.info(
+                    "Skipping update of %s: last fetch: %s, cache time: %s",
+                    endpoint,
+                    endpoint_settings["last_fetch"],
+                    endpoint_settings["cache_time"],
                 )
 
             if self.data:
@@ -1159,7 +1300,7 @@ class EnvoyReader:
             self.endpoint_production_json
             and self.endpoint_production_json.status_code == 401
         ):
-            raise RuntimeError(
+            raise EnvoyError(
                 "Could not connect to Envoy model. "
                 + "Appears your Envoy is running firmware that requires secure communcation. "
                 + "Please enter in the needed Enlighten credentials during setup."
@@ -1181,7 +1322,7 @@ class EnvoyReader:
                 self.endpoint_type = ENVOY_MODEL_S
 
         if not self.endpoint_type:
-            raise RuntimeError(
+            raise EnvoyError(
                 "Could not connect or determine Envoy model. "
                 + "Check that the device is up at 'https://"
                 + self.host
@@ -1276,9 +1417,9 @@ class EnvoyReader:
     async def upload_grid_profile(self, file):
         if self.endpoint_installer_agf is not None:
             formatted_url = ENDPOINT_URL_INSTALLER_AGF_UPLOAD_PROFILE.format(self.host)
-            resp = await self._async_post(
-                formatted_url, files={"file": open(file, "rb")}
-            )
+            loop = asyncio.get_running_loop()
+            content = await loop.run_in_executor(None, read_file_as_bytes, file)
+            resp = await self._async_post(formatted_url, files={"file": content})
             message = resp.json().get("message")
             if message != "success":
                 raise EnvoyError(f"Failed uploading grid profile: {message}")

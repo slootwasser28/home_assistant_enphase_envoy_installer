@@ -100,24 +100,27 @@ async def async_setup_entry(
                     )
 
         elif sensor_description.key.startswith("inverter_data_"):
-            _LOGGER.debug(f"Inverter Data Sensor {sensor_description}")
             if coordinator.data.get("inverter_device_data"):
-                _LOGGER.debug(f"Inverter Data Sensor DATA {sensor_description}")
                 for inverter in coordinator.data["inverter_device_data"].keys():
-                    _LOGGER.debug(f"Inverter Data Sensor DATA {inverter}")
-                    device_name = f"Inverter {inverter}"
-                    serial_number = inverter
-                    entities.append(
-                        EnvoyInverterEntity(
-                            description=sensor_description,
-                            name=f"{device_name} {sensor_description.name}",
-                            device_name=device_name,
-                            device_serial_number=serial_number,
-                            serial_number=None,
-                            coordinator=coordinator,
-                            parent_device=config_entry.unique_id,
+                    if (
+                        coordinator.data["inverter_device_data"][inverter].get(
+                            sensor_description.key[14:]
                         )
-                    )
+                        is not None
+                    ):
+                        device_name = f"Inverter {inverter}"
+                        serial_number = inverter
+                        entities.append(
+                            EnvoyInverterEntity(
+                                description=sensor_description,
+                                name=f"{device_name} {sensor_description.name}",
+                                device_name=device_name,
+                                device_serial_number=serial_number,
+                                serial_number=None,
+                                coordinator=coordinator,
+                                parent_device=config_entry.unique_id,
+                            )
+                        )
 
         elif sensor_description.key.startswith("inverter_info_"):
             if coordinator.data.get("inverter_info"):
@@ -137,35 +140,38 @@ async def async_setup_entry(
                     )
 
         elif sensor_description.key.startswith("relay_data_"):
-            _LOGGER.debug(f"Relay Data Sensor {sensor_description}")
             if coordinator.data.get("relay_device_data"):
-                _LOGGER.debug(f"Relay Data Sensor DATA {sensor_description}")
                 for relay in coordinator.data["relay_device_data"].keys():
-                    _LOGGER.debug(f"Relay Data Sensor DATA {relay}")
-                    device_name = f"Relay {relay}"
-                    serial_number = relay
-
-                    if sensor_description.key.endswith(("l1", "l2", "l3")):
-                        line = sensor_description.key[-2:].replace("l", "line")
-                        line_connected = (
-                            coordinator.data.get("relay_info", {})
-                            .get(relay, {})
-                            .get(f"{line}-connected")
+                    if (
+                        coordinator.data["relay_device_data"][relay].get(
+                            sensor_description.key[11:]
                         )
-                        if line_connected is False:
-                            continue
+                        is not None
+                    ):
+                        device_name = f"Relay {relay}"
+                        serial_number = relay
 
-                    entities.append(
-                        EnvoyRelayEntity(
-                            description=sensor_description,
-                            name=f"{device_name} {sensor_description.name}",
-                            device_name=device_name,
-                            device_serial_number=serial_number,
-                            serial_number=None,
-                            coordinator=coordinator,
-                            parent_device=config_entry.unique_id,
+                        if sensor_description.key.endswith(("l1", "l2", "l3")):
+                            line = sensor_description.key[-2:].replace("l", "line")
+                            line_connected = (
+                                coordinator.data.get("relay_info", {})
+                                .get(relay, {})
+                                .get(f"{line}-connected")
+                            )
+                            if line_connected is False:
+                                continue
+
+                        entities.append(
+                            EnvoyRelayEntity(
+                                description=sensor_description,
+                                name=f"{device_name} {sensor_description.name}",
+                                device_name=device_name,
+                                device_serial_number=serial_number,
+                                serial_number=None,
+                                coordinator=coordinator,
+                                parent_device=config_entry.unique_id,
+                            )
                         )
-                    )
 
         elif sensor_description.key.startswith("relay_info_"):
             if coordinator.data.get("relay_info"):
@@ -432,44 +438,45 @@ class EnvoyInverterEntity(EnvoyDeviceEntity):
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
-        if self.entity_description.key == "inverter_data_watts":
-            if self.coordinator.data.get("inverter_production"):
-                value = (
-                    self.coordinator.data.get("inverter_production")
-                    .get(self._device_serial_number)
-                    .get("lastReportDate")
-                )
-                return {
-                    "last_reported": datetime.datetime.fromtimestamp(
-                        int(value), tz=datetime.timezone.utc
+        try:
+            if self.entity_description.key == "inverter_data_watts":
+                if self.coordinator.data.get("inverter_production"):
+                    value = (
+                        self.coordinator.data.get("inverter_production")
+                        .get(self._device_serial_number)
+                        .get("lastReportDate")
                     )
-                }
-        elif self.entity_description.key.startswith("inverter_info_"):
-            if self.coordinator.data.get("inverter_info"):
-                value = (
-                    self.coordinator.data.get("inverter_info")
-                    .get(self._device_serial_number)
-                    .get("last_rpt_date")
-                )
-                return {
-                    "last_reported": datetime.datetime.fromtimestamp(
-                        int(value), tz=datetime.timezone.utc
+                    return {
+                        "last_reported": datetime.datetime.fromtimestamp(
+                            int(value), tz=datetime.timezone.utc
+                        )
+                    }
+            elif self.entity_description.key.startswith("inverter_info_"):
+                if self.coordinator.data.get("inverter_info"):
+                    value = (
+                        self.coordinator.data.get("inverter_info")
+                        .get(self._device_serial_number)
+                        .get("last_rpt_date")
                     )
-                }
-        elif self.entity_description.key.startswith("inverter_data_"):
-            if self.coordinator.data.get("inverter_device_data"):
-                value = (
-                    self.coordinator.data.get("inverter_device_data")
-                    .get(self._device_serial_number)
-                    .get("last_reading")
-                )
-                return {
-                    "last_reported": datetime.datetime.fromtimestamp(
-                        int(value), tz=datetime.timezone.utc
+                    return {
+                        "last_reported": datetime.datetime.fromtimestamp(
+                            int(value), tz=datetime.timezone.utc
+                        )
+                    }
+            elif self.entity_description.key.startswith("inverter_data_"):
+                if self.coordinator.data.get("inverter_device_data"):
+                    value = (
+                        self.coordinator.data.get("inverter_device_data")
+                        .get(self._device_serial_number)
+                        .get("last_reading")
                     )
-                }
-
-        return None
+                    return {
+                        "last_reported": datetime.datetime.fromtimestamp(
+                            int(value), tz=datetime.timezone.utc
+                        )
+                    }
+        except (ValueError, TypeError):
+            return None
 
     @property
     def device_info(self) -> DeviceInfo | None:

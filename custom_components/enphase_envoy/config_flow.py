@@ -6,7 +6,7 @@ import contextlib
 import logging
 from typing import Any
 
-from .envoy_reader import EnvoyReader
+from .envoy_reader import EnvoyReader, EnlightenError, EnvoyError
 import httpx
 import voluptuous as vol
 
@@ -52,9 +52,9 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> EnvoyRead
 
     try:
         await envoy_reader.get_data()
-    except httpx.HTTPStatusError as err:
+    except EnlightenError as err:
         raise InvalidAuth from err
-    except (RuntimeError, httpx.HTTPError) as err:
+    except (EnvoyError, httpx.ConnectError) as err:
         raise CannotConnect from err
 
     return envoy_reader
@@ -220,16 +220,12 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @callback
-    def async_get_options_flow(config_entry):
-        return EnvoyOptionsFlowHandler(config_entry)
+    def async_get_options_flow(config_entry: ConfigEntry):
+        return EnvoyOptionsFlowHandler()
 
 
 class EnvoyOptionsFlowHandler(config_entries.OptionsFlow):
     """Envoy config flow options handler."""
-
-    def __init__(self, config_entry):
-        """Initialize Envoy options flow."""
-        self.config_entry = config_entry
 
     async def async_step_init(self, _user_input=None):
         """Manage the options."""
@@ -288,6 +284,10 @@ class EnvoyOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Optional(
                 "enable_pcu_comm_check",
                 default=self.config_entry.options.get("enable_pcu_comm_check", False),
+            ): bool,
+            vol.Optional(
+                "devstatus_device_data",
+                default=self.config_entry.options.get("devstatus_device_data", False),
             ): bool,
             vol.Optional(
                 "lifetime_production_correction",

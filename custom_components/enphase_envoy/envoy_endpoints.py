@@ -73,18 +73,30 @@ ENVOY_ENDPOINTS = {
         "url": "https://{}/ivp/pdm/device_data",
         "cache": 0,
         "installer_required": False,
-        "optional": False,
+        "optional": True,
     },
-    # "devstatus": {
-    #     "url": "https://{}/ivp/peb/devstatus",
-    #     "cache": 0,
-    #     "installer_required": True,
-    #     "optional": True,
-    # },
+    "devstatus": {
+        "url": "https://{}/ivp/peb/devstatus",
+        "cache": 0,
+        "installer_required": True,
+        "optional": True,
+    },
     "pcu_comm_check": {
         "url": "https://{}/installer/pcu_comm_check",
         "cache": 3600,
         "installer_required": True,
+        "optional": True,
+    },
+    "meters": {
+        "url": "https://{}/ivp/meters",
+        "cache": 0,
+        "installer_required": False,
+        "optional": True,
+    },
+    "meters_readings": {
+        "url": "https://{}/ivp/meters/readings",
+        "cache": 0,
+        "installer_required": False,
         "optional": True,
     },
     # Netprofile endpoints

@@ -5,8 +5,8 @@
           "reauth_successful": "Herauthenticatie was succesvol"
       },
       "error": {
-          "cannot_connect": "Kan geen verbinding maken",
-          "invalid_auth": "Ongeldige authenticatie",
+          "cannot_connect": "Kan geen verbinding maken met Envoy. Controleer host en serienummer.",
+          "invalid_auth": "Inloggen mislukt. Controleer Enlighten gebruikersnaam/wachtwoord.",
           "unknown": "Onverwachte fout"
       },
       "flow_title": "{serial} ({host})",
@@ -35,6 +35,7 @@
           "enable_additional_metrics": "[Envoy-S Metered] Extra metrics inschakelen, zoals total amps, frequency, apparent en reactive power en power factor.",
           "disable_installer_account_use": "Haal geen data op die een installateur of DHZ enphase account vereisen",
           "enable_pcu_comm_check": "Powerline communication level sensors inschakelen (langzaam)",
+          "devstatus_device_data": "Gebruik alternatief endpoint 'devstatus' (alleen installer account) voor apparaat sensoren",
           "lifetime_production_correction": "Correctie van lifetime production waarde (Wh)",
           "disabled_endpoints": "[Geavanceerd] Uitgeschakelde Envoy endpoints"
         },

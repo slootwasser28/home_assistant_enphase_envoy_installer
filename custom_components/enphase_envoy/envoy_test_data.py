@@ -70,6 +70,12 @@ ENVOY_ENDPOINTS = {
         "installer_required": False,
         "optional": False,
     },
+    "device_data": {
+        "url": TEST_DATA + "endpoint_device_data.json",
+        "cache": 0,
+        "installer_required": False,
+        "optional": True,
+    },
     "devstatus": {
         "url": TEST_DATA + "endpoint_devstatus.json",
         "cache": 20,
@@ -80,6 +86,18 @@ ENVOY_ENDPOINTS = {
         "url": TEST_DATA + "endpoint_pcu_comm_check.json",
         "cache": 90,
         "installer_required": True,
+        "optional": True,
+    },
+    "meters": {
+        "url": TEST_DATA + "endpoint_meters.json",
+        "cache": 0,
+        "installer_required": False,
+        "optional": True,
+    },
+    "meters_readings": {
+        "url": TEST_DATA + "endpoint_meters_readings.json",
+        "cache": 0,
+        "installer_required": False,
         "optional": True,
     },
     # Netprofile endpoints
